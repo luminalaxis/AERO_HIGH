@@ -22,7 +22,7 @@
  │   GPS NEO-6M (UART, PPS)                     │──UART──┐
  │   (서보×2~4, PWM)                             │        ▼
  │                                              │   [텔레메트리 게이트웨이]
- │  [wireless-powertrain-control]  (MCU 미정)    │   ESP32-S3, 외장 안테나
+ │  [wireless-powertrain-control] NUCLEO-F446RE │   ESP32-S3, 외장 안테나
  │   CAN (listen-only) ◄── Orion BMS2           │──►  주 링크 (미정, 무선 링크 문서 참고)
  │                     ◄── Sevcon Gen4          │   + PSRAM 링버퍼 (백필용)
  │                          ─► microSD          │──UART──┘
@@ -45,7 +45,7 @@
 | IMU | **MPU-6050** (I2C) | 아래 로거 README 주의사항 참고 |
 | GPS | **NEO-6M** (UART) | 최대 5 Hz |
 | 무선 게이트웨이 | **ESP32-S3-WROOM-1U-N16R8** (또는 N8R8) — 개발용 보드: ESP32-S3-DevKitC-1U | 차량 1 + 피트 1 + 예비 1. **u.FL 커넥터 모델(-1U)** 이어야 안테나 연장 가능 (PCB 안테나 모델 -1 은 연장 불가) |
-| 파워트레인 CAN 노드 | 미정 (NUCLEO-F446RE 1장 추가 권장) | CAN ×2 로 BMS·Sevcon 이 다른 버스여도 대응, 로거와 코드 공유 |
+| 파워트레인 CAN 노드 | **NUCLEO-F446RE** | bxCAN ×2 로 BMS·Sevcon 이 다른 버스여도 대응. 로거와 같은 칩이라 SD·프레임·UART 코드 공유 |
 | 무선 링크 | 미정 | [wireless-link-options.md](wireless-link-options.md) |
 
 ### NUCLEO-F446RE 주변장치 할당 (초안, CubeMX 에서 충돌 확인)

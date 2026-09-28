@@ -16,7 +16,22 @@
   - listen-only 모드는 버스에 ACK 조차 보내지 않으므로, 텔레메트리 장치가 고장나도 **파워트레인 CAN 에 영향을 주지 않습니다.**
   - 디코딩(DBC / CANopen 객체 사전)은 피트에서 하므로, 메시지 구성이 바뀌어도 펌웨어 수정이 필요 없습니다.
 - BMS 와 모터 컨트롤러가 다른 버스/비트레이트에 있으면 CAN 채널 2개가 있는 MCU(STM32F4 의 CAN1/CAN2 등)를 사용.
-- 하드웨어: STM32(bxCAN/FDCAN) 또는 ESP32(TWAI) + CAN 트랜시버(SN65HVD230 / TJA1051 등), 버스 종단 저항 위치 확인.
+- 하드웨어: **NUCLEO-F446RE** (bxCAN ×2) + 3.3 V CAN 트랜시버 (SN65HVD230, 또는 TJA1051T/3 처럼 3.3 V I/O 버전). 버스 종단 저항 위치 확인 (탭 노드에는 종단 저항을 달지 않음).
+
+## CAN 노드 하드웨어 (NUCLEO-F446RE)
+
+| 주변장치 | 핀(예) | 용도 |
+| --- | --- | --- |
+| CAN1 (silent 모드) | PA11 / PA12 | 버스 1 (예: Orion BMS2) |
+| CAN2 (silent 모드) | PB12 / PB13 | 버스 2 (예: Sevcon Gen4). BMS 와 같은 버스면 미사용 |
+| SDIO 4-bit | PC8–PC12, PD2 | microSD (로거와 동일) |
+| USART1 | PA9 / PA10 | ESP32-S3 게이트웨이 (로거와 공유 시 게이트웨이에 UART 2개 사용) |
+| USART2 | PA2 / PA3 | ST-LINK 가상 COM (디버그) |
+
+- bxCAN 의 **silent 모드**가 listen-only 에 해당합니다 (ACK·에러 프레임을 송신하지 않음). 트랜시버에 대기(S/RS) 핀이 있으면 수신 전용 상태로 고정하는 것도 방법입니다.
+- **CAN2 는 CAN1 의 필터 뱅크를 공유**하므로 CAN2 만 쓸 때도 CAN1 클럭을 켜야 하고, 필터 뱅크 분할(`SlaveStartFilterBank`)을 설정해야 합니다.
+- 비트레이트는 APB1(45 MHz) 기준으로 설정. 500 kbps·1 Mbps 모두 가능. 버스별 실제 비트레이트는 BMS 유틸리티/DVT 에서 확인.
+- 핀은 CubeMX 에서 충돌 확인 필요 (PA11/PA12 는 Nucleo 모포 헤더로 나옴).
 
 ## 원격 "제어" 에 대한 안전 원칙
 
@@ -32,7 +47,7 @@
 
 ```
 wireless-powertrain-control/
-├── firmware/      # CAN 수집 노드 (STM32 또는 ESP32)
+├── firmware/      # CAN 수집 노드 (NUCLEO-F446RE)
 ├── gateway/       # 차량 무선 게이트웨이 (ESP32) — 주행 로거와 공유 가능
 ├── pit/           # 피트 수신기 (Python / Raspberry Pi)
 └── docs/          # CAN ID 표, DBC, 배선도
