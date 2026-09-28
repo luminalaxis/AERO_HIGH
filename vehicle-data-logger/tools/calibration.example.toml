@@ -1,0 +1,72 @@
+# 지상고 변환 캘리브레이션 (예시)
+# ⚠ 아래 숫자는 모두 자리표시용 예시값입니다. 실제 차량에서 측정한 값으로 교체하세요.
+# 단위: mm, N, N/mm
+# 좌표: x = 앞차축 기준 뒤쪽 +, y = 차량 중심선 기준 왼쪽 +
+
+[geometry]
+wheelbase_mm = 1530.0
+track_front_mm = 1200.0
+track_rear_mm = 1180.0
+
+# 네 코너 공통값. [corners.XX] 에 같은 항목을 쓰면 그 코너만 덮어씀.
+[defaults]
+pot_sign = 1.0                 # bump(압축) 시 pot 값이 증가하면 1, 감소하면 -1
+spring_rate_n_per_mm = 35.0    # 스프링 강성 (댐퍼 축 기준)
+tire_rate_n_per_mm = 90.0      # 타이어 수직 강성 (레이스 공기압 기준)
+motion_ratio = 0.9             # 댐퍼 변위 / 휠 변위. 상수 대신 아래 테이블도 가능
+adc_mm_per_count = 0.01831     # .aero 입력 시: ADC count → pot mm (예: 75 mm / 4096)
+adc_offset_mm = 0.0
+
+# 정지 기준 상태: 평평한 바닥, 드라이버 탑승, 레이스 공기압·연료/배터리 상태.
+# 이때의 지상고 실측값과 pot 값을 짝지어 기록.
+[corners.FL]
+static_ride_height_mm = 35.0   # 앞차축 위치, 섀시 기준면(플로어 하면 등) 높이
+static_pot_mm = 25.0
+static_load_n = 680.0          # 선택: 코너 웨이트. 있으면 휠 들림(lift) 감지
+
+[corners.FR]
+static_ride_height_mm = 35.0
+static_pot_mm = 25.2
+static_load_n = 680.0
+
+[corners.RL]
+static_ride_height_mm = 40.0
+static_pot_mm = 24.8
+static_load_n = 760.0
+spring_rate_n_per_mm = 40.0
+
+[corners.RR]
+static_ride_height_mm = 40.0
+static_pot_mm = 25.1
+static_load_n = 760.0
+spring_rate_n_per_mm = 40.0
+# 모션비가 스트로크에 따라 변하면 잭 테스트 결과를 테이블로 입력
+# (정지 기준 대비 [댐퍼 변위, 휠 변위], 기준점 0 은 자동 보정). 지정하면 defaults 의 motion_ratio 대신 사용.
+# motion_ratio_table = [[-20.0, -23.0], [0.0, 0.0], [20.0, 21.5]]
+
+# 안티롤바: 휠 기준 강성 (좌우 휠 변위 차 1 mm 당 N)
+[arb]
+front_n_per_mm = 15.0
+rear_n_per_mm = 10.0
+
+[filter]
+load_lowpass_hz = 10.0         # 타이어 하중 추정 로우패스 (댐퍼 힘·비스프링 질량 영향 완화). 0 = 끔
+gap_reset_s = 0.05             # 샘플 간격이 이보다 크면 필터 초기화 (데이터 손실 구간)
+
+# 추가로 지상고를 계산할 지점 (정지 기준 상태의 실측 높이)
+[[points]]
+name = "front_wing"
+x_mm = -650.0
+y_mm = 0.0
+static_height_mm = 55.0
+
+[[points]]
+name = "diffuser_exit"
+x_mm = 1900.0
+y_mm = 0.0
+static_height_mm = 90.0
+
+# CSV 입력 열 이름 (기본값과 같으면 생략 가능)
+[csv]
+time_column = "time_s"
+pot_columns = { FL = "pot_fl_mm", FR = "pot_fr_mm", RL = "pot_rl_mm", RR = "pot_rr_mm" }

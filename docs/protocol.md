@@ -1,0 +1,95 @@
+# AERO 프레임 프로토콜 v1
+
+두 하위 프로젝트(주행 정보 로거, 파워트레인 무선 제어)가 **공통으로 사용하는 데이터 단위**입니다.
+구현: [`common/protocol/c`](../common/protocol/c) (차량 MCU), [`common/protocol/python`](../common/protocol/python) (피트/분석 도구).
+
+## 설계 원칙
+
+1. **SD 카드와 무선에 동일한 바이트를 기록/전송한다.** SD 로그가 항상 원본(ground truth)이며, 무선 스트림은 그 부분집합이다.
+2. 모든 프레임은 `(source_id, boot_id, seq)` 로 **전역 유일**하다. 무선 수신 데이터와 SD 로그를 이 키로 중복 제거·병합한다.
+3. `seq` 는 소스별로 프레임마다 1씩 증가 → 수신 측은 **빠진 번호로 손실을 정확히 감지**한다.
+4. CRC-32 로 **손상된 프레임을 폐기**하고, 스트림에서는 다음 sync 로 재동기화한다.
+5. 링크 종류(UART, UDP/Wi-Fi, LoRa, LTE)에 독립적이다. 링크를 바꿔도 프로토콜은 그대로.
+
+## 프레임 구조 (리틀 엔디언)
+
+| 오프셋 | 크기 | 필드 | 설명 |
+| --- | --- | --- | --- |
+| 0 | 2 | sync | `0xA5 0x5A` |
+| 2 | 1 | version | `1` |
+| 3 | 1 | source_id | `0x01` 주행로거, `0x02` 파워트레인, `0x0F` 게이트웨이, `0x10` 피트 |
+| 4 | 1 | msg_type | 아래 표 |
+| 5 | 1 | flags | bit0 `RETRANSMIT` (NACK/백필에 의한 재전송) |
+| 6 | 2 | payload_len | 0 ~ 1024 |
+| 8 | 2 | boot_id | 노드 부팅마다 +1 (플래시/SD에 저장). seq 리셋 구분용 |
+| 10 | 4 | seq | 소스별 프레임 번호, 부팅 시 0부터, 오버플로 시 wrap |
+| 14 | 8 | timestamp_us | 노드 시간(µs). GPS PPS / TIME_SYNC 로 보정 |
+| 22 | N | payload | |
+| 22+N | 4 | crc32 | offset 2 ~ 22+N-1 에 대한 CRC-32 (zlib 과 동일) |
+
+오버헤드 26바이트. 고속 센서는 **여러 샘플을 한 프레임에 묶어서**(예: 20 ms 분량) 오버헤드를 줄입니다.
+
+## msg_type
+
+| 값 | 이름 | 방향 | 내용 |
+| --- | --- | --- | --- |
+| 0x01 | HEARTBEAT | 차→피트 | 노드 상태, SD 상태/여유공간, 최신 seq, 링크 통계 |
+| 0x10 | SUSPENSION | 차→피트 | 리니어 포텐셔미터 4ch (묶음 샘플) |
+| 0x11 | IMU | 차→피트 | 6축 가속도/자이로 (묶음 샘플) |
+| 0x12 | GPS | 차→피트 | 위치/속도/시간 |
+| 0x20 | CAN_RAW | 차→피트 | CAN 프레임 원본 묶음 (Orion BMS2, Sevcon Gen4) |
+| 0x80 | NACK | 피트→차 | 재전송 요청 범위 목록 |
+| 0x81 | TIME_SYNC | 양방향 | 노드 간 시간 동기화 |
+
+payload 세부 형식은 센서/하드웨어 확정 후 이 문서에 추가합니다.
+
+### SUSPENSION payload
+
+| 오프셋 | 크기 | 필드 |
+| --- | --- | --- |
+| 0 | 4 | sample_period_us (u32) |
+| 4 | 8 × N | 샘플 N개, 각 샘플 = u16 raw ADC × 4 (FL, FR, RL, RR) |
+
+- 헤더 `timestamp_us` = 첫 샘플 시각, i 번째 샘플 시각 = `timestamp_us + i × sample_period_us`.
+- 권장: 500 Hz, 프레임당 10샘플(20 ms) → payload 84 B.
+- mm 환산은 피트에서 캘리브레이션으로 수행 ([`vehicle-data-logger/tools`](../vehicle-data-logger/tools)).
+
+### NACK payload
+
+10바이트 범위의 배열:
+
+| 오프셋 | 크기 | 필드 |
+| --- | --- | --- |
+| 0 | 1 | source_id |
+| 1 | 1 | 예약(0) |
+| 2 | 2 | boot_id |
+| 4 | 4 | first_seq |
+| 8 | 2 | count |
+
+## 손실 감지 → 보강 흐름
+
+```
+ 차량 노드                                   피트
+ ─────────                                   ────
+ frame(seq=n) ──► SD 기록 (항상)
+              └─► RAM 링버퍼 ──► 무선 ──►  GapTracker.update()
+                                              │ 빠진 seq 발견
+              ◄──────────── NACK(범위) ◄─────┘
+ 링버퍼(최근) 또는 SD(오래된 것)에서 읽어
+ RETRANSMIT 플래그로 재전송 ──────────────►  "filled" 처리
+                                              │
+ 세션 종료 후 SD 전체 동기화 ─────────────►  (source, boot, seq) 로 병합
+                                              남은 구멍 = 진짜 손실
+```
+
+- **실시간 스트림이 항상 우선**이고, 재전송은 남는 대역폭으로 속도를 제한해서 보냅니다.
+- 피트에서 보간 등으로 채운 값은 반드시 `reconstructed` 로 표시하고, 원본 데이터와 섞지 않습니다.
+- `boot_id` 가 바뀌면 노드가 재부팅된 것 → 새 세션으로 추적하고 재부팅 사실 자체를 이벤트로 기록합니다.
+
+## 테스트 벡터
+
+```
+Frame(source_id=0x01, msg_type=0x10, flags=0, boot_id=0x0102,
+      seq=0x01020304, timestamp_us=0x0102030405060708, payload=DE AD BE EF)
+→ a55a0101100004000201040302010807060504030201deadbeef32c927d5
+```

@@ -1,0 +1,30 @@
+name: tests
+
+on:
+  push:
+    paths:
+      - "common/protocol/**"
+      - "vehicle-data-logger/tools/**"
+      - ".github/workflows/protocol-tests.yml"
+  pull_request:
+    paths:
+      - "common/protocol/**"
+      - "vehicle-data-logger/tools/**"
+      - ".github/workflows/protocol-tests.yml"
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Protocol C tests
+        run: make -C common/protocol/c test
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Protocol Python tests
+        working-directory: common/protocol/python
+        run: python -m unittest -v
+      - name: vehicle-data-logger tools tests
+        working-directory: vehicle-data-logger/tools
+        run: python -m unittest -v
