@@ -37,7 +37,6 @@
 | 0x10 | SUSPENSION | 차→피트 | 리니어 포텐셔미터 4ch (묶음 샘플) |
 | 0x11 | IMU | 차→피트 | 6축 가속도/자이로 (묶음 샘플) |
 | 0x12 | GPS | 차→피트 | 위치/속도/시간 |
-| 0x13 | RIDE_HEIGHT | 차→피트 | 지상고 4ch |
 | 0x20 | CAN_RAW | 차→피트 | CAN 프레임 원본 묶음 (Orion BMS2, Sevcon Gen4) |
 | 0x80 | NACK | 피트→차 | 재전송 요청 범위 목록 |
 | 0x81 | TIME_SYNC | 양방향 | 노드 간 시간 동기화 |

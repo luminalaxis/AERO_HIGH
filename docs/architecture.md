@@ -20,7 +20,6 @@
  │   포텐셔미터×4 (ADC+DMA)                      │
  │   IMU 6축 (SPI)          ─► microSD (SDIO)   │
  │   GPS (UART, PPS)                            │──UART──┐
- │   지상고×4                                    │        │
  │   (서보×2~4, PWM)                             │        ▼
  │                                              │   [텔레메트리 게이트웨이]
  │  [wireless-powertrain-control] STM32/ESP32   │   ESP32(-S3), 외장 안테나
