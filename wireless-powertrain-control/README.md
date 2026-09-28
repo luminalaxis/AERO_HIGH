@@ -7,7 +7,7 @@
 
 | 장치 | 통신 | 비고 |
 | --- | --- | --- |
-| **Orion BMS 2** | CAN 2.0 (BMS2 는 CAN 포트 2개) | Orion BMS 유틸리티에서 브로드캐스트 메시지(ID·주기·내용: 팩 전압/전류/SOC/온도/셀 전압 등) 설정. OBD-II PID 요청 방식 조회도 지원 |
+| **Orion BMS 2** | CAN 2.0, **500 kbps** (BMS2 는 CAN 포트 2개) | DBC·설정 파일: [docs/can/](docs/can/). Orion BMS 유틸리티에서 브로드캐스트 메시지(ID·주기·내용: 팩 전압/전류/SOC/온도/셀 전압 등) 설정. OBD-II PID 요청 방식 조회도 지원 |
 | **Sevcon Gen4** | CANopen | TPDO 로 속도/토크/전류/온도/폴트 송신, SDO 로 파라미터 읽기·쓰기. 설정은 DVT 소프트웨어. 비트레이트는 현재 설정값 확인 필요 |
 
 ## 통신 방식 권장
