@@ -11,21 +11,21 @@
 3. 피트는 빠진 seq 를 NACK 로 요청해 백필하고, 세션 후 SD 동기화로 최종 완성한다.
 4. 무선 링크가 끊기거나 느려져도 **센서 수집과 SD 기록은 절대 멈추지 않는다** (수집 ↔ 전송 분리).
 
-## 전체 구성 (권장안)
+## 전체 구성
 
 ```
  ┌──────────────────── 차량 ────────────────────┐
  │                                              │
- │  [vehicle-data-logger]   STM32               │
+ │  [vehicle-data-logger]   NUCLEO-F103RB       │
  │   포텐셔미터×4 (ADC+DMA)                      │
- │   IMU 6축 (SPI)          ─► microSD (SDIO)   │
- │   GPS (UART, PPS)                            │──UART──┐
+ │   IMU MPU-6050 (I2C)     ─► microSD (SPI)    │
+ │   GPS NEO-6M (UART, PPS)                     │──UART──┐
  │   (서보×2~4, PWM)                             │        ▼
  │                                              │   [텔레메트리 게이트웨이]
- │  [wireless-powertrain-control] STM32/ESP32   │   ESP32(-S3), 외장 안테나
- │   CAN (listen-only) ◄── Orion BMS2           │──►  주 링크 (Wi-Fi/LTE)
- │                     ◄── Sevcon Gen4          │   + LoRa 보조 링크
- │                          ─► microSD          │──UART──┘   + RAM 링버퍼
+ │  [wireless-powertrain-control]  (MCU 미정)    │   ESP32-S3, 외장 안테나
+ │   CAN (listen-only) ◄── Orion BMS2           │──►  주 링크 (미정, 무선 링크 문서 참고)
+ │                     ◄── Sevcon Gen4          │   + PSRAM 링버퍼 (백필용)
+ │                          ─► microSD          │──UART──┘
  └──────────────────────────────────────────────┘
                          │ 무선 (≤300 m)
                          ▼
@@ -34,13 +34,37 @@
 
 - **수집 노드와 무선 게이트웨이를 분리**하면, 무선 스택(Wi-Fi 재연결, 버퍼링)이 센서 샘플링 타이밍에 영향을 주지 않습니다.
 - 두 프로젝트가 **게이트웨이 하나를 공유**하면 차량에 무선 모듈이 한 세트만 있으면 됩니다.
-- 초기 프로토타입은 ESP32 하나로 수집+전송을 같이 해도 되지만, 구조(프레임/SD/링버퍼)는 위와 동일하게 유지합니다.
+- F103RB 는 RAM 이 20 KB 뿐이므로 **NACK 백필용 링버퍼는 게이트웨이(ESP32-S3 PSRAM)에 둡니다.**
+  STM32 는 "샘플링 → 프레임 → SD 기록 → UART 송신"만 담당합니다.
+
+## 확정 하드웨어 (2026-09)
+
+| 역할 | 부품 | 비고 |
+| --- | --- | --- |
+| 주행 로거 수집 노드 | **NUCLEO-F103RB** (STM32F103RB, Cortex-M3 72 MHz, Flash 128 KB, RAM 20 KB) | FPU·SDIO 없음 → SD 는 SPI, 실수 연산은 피트에서 |
+| IMU | **MPU-6050** (I2C) | 아래 로거 README 주의사항 참고 |
+| GPS | **NEO-6M** (UART) | 최대 5 Hz |
+| 무선 게이트웨이 | **ESP32-S3** (필요 시 추가 구매) | **외장 안테나(-1U) + PSRAM 모델** 권장 (예: ESP32-S3-WROOM-1U-N8R8 탑재 보드) |
+| 파워트레인 CAN 노드 | 미정 | F103RB 는 CAN 1채널(USB 와 SRAM 공유). ESP32-S3(TWAI 1채널) 또는 STM32 추가 |
+| 무선 링크 | 미정 | [wireless-link-options.md](wireless-link-options.md) |
+
+### NUCLEO-F103RB 주변장치 할당 (초안)
+
+| 주변장치 | 용도 |
+| --- | --- |
+| ADC1 + DMA (스캔 4ch), TIM 트리거 500 Hz | 포텐셔미터 ×4 |
+| I2C1 400 kHz (+DMA) | MPU-6050 |
+| USART3 | NEO-6M (UBX, 115200 bps 로 변경) |
+| TIM 입력 캡처 | GPS PPS |
+| SPI1 | microSD (FatFS) |
+| USART1 (921600 bps 이상) | ESP32-S3 게이트웨이 |
+| USART2 | ST-LINK 가상 COM (디버그 로그) — 보드에 고정 연결 |
 
 ## MCU 역할 추천
 
 | 보드 | 추천 역할 | 이유 |
 | --- | --- | --- |
-| **STM32** (F4/G4 계열, 예: NUCLEO-F446RE, STM32F405) | 센서 수집 노드, CAN 노드 | 정확한 ADC+DMA, 타이머(PPS 캡처, 서보 PWM), SDIO, bxCAN/FDCAN 내장 |
+| **STM32** (확정: NUCLEO-F103RB) | 센서 수집 노드, CAN 노드 | 정확한 ADC+DMA, 타이머(PPS 캡처, 서보 PWM), bxCAN 내장. F4 계열이면 SDIO·FPU·RAM 여유가 있으나 F103RB 로도 이 구성은 충분 |
 | **ESP32 / ESP32-S3** (외장 안테나 모델) | 무선 게이트웨이 | Wi-Fi/ESP-NOW 내장, TWAI(CAN) 도 가능. 단 ADC 가 비선형이고 Wi-Fi 사용 시 ADC2 사용 불가 → 정밀 아날로그 측정에는 비추천 |
 | **Raspberry Pi** | 피트 수신기/서버 | 리눅스, Python, 대시보드 연동. 차량 탑재는 부팅 시간(수십 초)·전원 차단 시 SD 손상 위험으로 비추천 (쓴다면 UPS HAT 필수) |
 | **Arduino** | 초기 센서 동작 확인용 | 빠른 프로토타이핑. 최종 차량용으로는 성능/신뢰성 부족 |
@@ -49,7 +73,7 @@
 
 | 대상 | 도구 |
 | --- | --- |
-| STM32 | **STM32CubeMX**(핀/클럭/주변장치 설정, 코드 생성) + **CMake** + **VS Code**(STM32Cube for VS Code 확장). 미들웨어: FreeRTOS, FatFS (CubeMX 제공) |
+| STM32 | **STM32CubeMX**(핀/클럭/주변장치 설정, 코드 생성) + **CMake** + **VS Code**(STM32Cube for VS Code 확장). 미들웨어: FatFS (CubeMX 제공). F103RB 는 RAM 20 KB 라 FreeRTOS 없이 DMA + 슈퍼루프로 시작 권장 |
 | ESP32 | **VS Code + PlatformIO** (Arduino-ESP32 프레임워크, 필요 시 ESP-IDF API 직접 사용) |
 | 피트 / 분석 / Raspberry Pi | **Python 3** (표준 라이브러리 기반 `aero_protocol`, 필요 시 FastAPI/MQTT) |
 | 공통 프로토콜 | C99 (`common/protocol/c`) — STM32/ESP32 양쪽에 그대로 포함 |
@@ -73,4 +97,4 @@
 
 ## 무선 링크
 
-[wireless-link-options.md](wireless-link-options.md) 참고. 요약: **주 링크(Wi-Fi 또는 LTE) + LoRa 보조 링크 + SD** 3중 구조를 권장하며, 트랙 실측 후 결정합니다.
+[wireless-link-options.md](wireless-link-options.md) 참고. 요약: ESP32-S3 로 **ESP-NOW 와 Wi-Fi(UDP)를 같은 하드웨어로 실측 비교**한 뒤 주 링크를 정하고, 필요하면 LoRa 보조 링크를 추가합니다. SD 는 항상 원본입니다.
