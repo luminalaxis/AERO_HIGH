@@ -1,0 +1,21 @@
+name: protocol-tests
+
+on:
+  push:
+    paths: ["common/protocol/**", ".github/workflows/protocol-tests.yml"]
+  pull_request:
+    paths: ["common/protocol/**", ".github/workflows/protocol-tests.yml"]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: C tests
+        run: make -C common/protocol/c test
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Python tests
+        working-directory: common/protocol/python
+        run: python -m unittest -v
