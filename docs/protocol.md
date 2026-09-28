@@ -43,6 +43,17 @@
 
 payload 세부 형식은 센서/하드웨어 확정 후 이 문서에 추가합니다.
 
+### SUSPENSION payload
+
+| 오프셋 | 크기 | 필드 |
+| --- | --- | --- |
+| 0 | 4 | sample_period_us (u32) |
+| 4 | 8 × N | 샘플 N개, 각 샘플 = u16 raw ADC × 4 (FL, FR, RL, RR) |
+
+- 헤더 `timestamp_us` = 첫 샘플 시각, i 번째 샘플 시각 = `timestamp_us + i × sample_period_us`.
+- 권장: 500 Hz, 프레임당 10샘플(20 ms) → payload 84 B.
+- mm 환산은 피트에서 캘리브레이션으로 수행 ([`vehicle-data-logger/tools`](../vehicle-data-logger/tools)).
+
 ### NACK payload
 
 10바이트 범위의 배열:
